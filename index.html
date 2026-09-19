@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f0e7">
+  <meta name="description" content="深淵貓本道具分配器：四人固定順序、四種道具持續分配、多組存檔與日期查詢。">
+  <title>深淵貓本分配器</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="./"><span class="brand-icon">貓</span><span>深淵貓本<span class="brand-sub">道具分配器</span></span></a><span class="local-badge"><i></i> 本機存檔</span></header>
+  <main>
+    <div class="page-title"><div><p class="eyebrow">ABYSS · LOOT ALLOCATOR</p><h1>這次，也公平分。</h1><p class="subtitle">四種道具各自輪流。今天沒分完，下次接著分。</p></div><button id="new-save" class="primary">＋ 建立存檔</button></div>
+    <div id="notice" role="status" aria-live="polite" hidden></div>
+    <div class="layout">
+      <aside class="panel saves-panel"><div class="section-heading"><h2>我的存檔</h2><span id="save-count" class="counter">0</span></div><p class="muted small">選擇隊伍，接續上次進度</p><div id="save-list"><p class="muted">正在讀取存檔…</p></div><div class="backup-tools"><button id="import-backup" class="quiet">↥ 匯入備份</button><p class="small muted">資料保存在此瀏覽器。換裝置或清除網站資料前，請先匯出備份。</p></div></aside>
+      <section id="empty-state" class="panel empty" hidden><span class="empty-symbol">✦</span><h2>為你的隊伍開一份存檔</h2><p>第一次排好四人順序，之後每次都接著分。<br>換一位隊員，就換另一份存檔。</p><button id="empty-create" class="primary">建立第一份存檔</button></section>
+      <div id="workspace" hidden>
+        <section class="panel team-panel"><div class="section-heading"><div><p class="eyebrow">CURRENT SAVE</p><h2 id="save-name"></h2></div><button id="export-backup" class="quiet">↧ 匯出備份</button></div><ol id="members" class="member-order"></ol><div class="team-footer"><span>分配順序固定，與當天組隊順序無關</span><span id="save-status"></span></div></section>
+        <nav class="tabs" aria-label="存檔功能"><button id="tab-allocate" class="active" aria-current="page">本輪分配</button><button id="tab-history">歷史查詢</button></nav>
+        <section id="allocate-view">
+          <form id="round-form" class="panel"><div class="section-heading"><div><h2>本輪開到多少？</h2><p class="muted small">填入四種道具數量，0 也可以記錄。</p></div><label class="date-label">紀錄日期<input type="date" id="round-date" required></label></div><div id="item-inputs" class="item-grid"></div><label class="round-note-input" for="round-note">本輪寶物註解 <span class="muted small">選填 · 隨本輪保存</span><textarea id="round-note" rows="2" maxlength="2000" placeholder="例如：R8 改石 × 1，分給寶寶；其他寶物待分配"></textarea></label><div class="round-actions"><span class="muted small">確認後自動存檔，下輪接續分配</span><button type="submit" class="primary" id="record-round">確認分配並存檔 <span>→</span></button></div></form>
+          <section id="last-round" class="panel" hidden></section>
+          <section class="panel totals-panel"><div class="section-heading"><h2>累計分配</h2><span id="round-count" class="muted small"></span></div><div id="totals-table" class="table-scroll"></div><p class="muted small footnote">四種道具分開累計，各自記住下一位。沒有最後一輪。</p></section>
+        </section>
+        <section id="history-view" class="panel" hidden><div class="section-heading"><div><h2>歷史查詢</h2><p class="muted small">需要時再查詢，每頁最多 30 筆。</p></div></div><form id="history-form" class="history-filters"><label>開始日期<input id="history-from" type="date" required></label><label>結束日期<input id="history-to" type="date" required></label><label>查看方式<select id="history-mode"><option value="days">每日總量</option><option value="rounds">逐輪明細</option></select></label><button type="submit" class="primary">查詢紀錄</button></form><div id="history-results" class="history-empty">選擇日期後查詢；平常不載入歷史明細。</div><div class="pagination" id="history-pagination" hidden><button id="history-prev">← 上一頁</button><span id="history-page"></span><button id="history-next">下一頁 →</button></div></section>
+      </div>
+    </div>
+    <footer>深淵貓本分配器 <span>·</span> 每一份戰利品，都有下一位。</footer>
+  </main>
+  <dialog id="create-dialog"><form id="create-form"><div class="section-heading"><h2>建立新存檔</h2><button type="button" id="close-create" class="icon-button" aria-label="關閉">×</button></div><p class="muted">依這裡的順序持續分配，建立後固定不變。</p><label>存檔名稱 <span class="muted small">選填</span><input id="new-name" maxlength="60" placeholder="例如：0919"></label><fieldset><legend>四位隊員 · 分配順序</legend><div class="create-grid"><label>01<input name="member" required maxlength="30" placeholder="寶寶"></label><label>02<input name="member" required maxlength="30" placeholder="咩咩"></label><label>03<input name="member" required maxlength="30" placeholder="爆肝"></label><label>04<input name="member" required maxlength="30" placeholder="月"></label></div></fieldset><fieldset><legend>四種道具 · 可自訂名稱</legend><div class="create-grid"><label>道具 1<input name="item" required maxlength="30" value="證明"></label><label>道具 2<input name="item" required maxlength="30" value="結晶(100)"></label><label>道具 3<input name="item" required maxlength="30" value="結晶(300)"></label><label>道具 4<input name="item" required maxlength="30" value="結晶(500)"></label></div></fieldset><p id="create-error" role="alert" class="error" hidden></p><button id="create-submit" class="primary full" type="submit">建立存檔，開始分配</button></form></dialog>
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><form method="dialog"><h2 id="confirm-title">確認操作</h2><p id="confirm-message" style="margin-top:16px"></p><div class="latest-actions"><button value="cancel" id="confirm-cancel">取消</button><button value="confirm" class="primary">確認</button></div></form></dialog>
+  <input type="file" id="backup-file" accept="application/json,.json" hidden>
+</body>
+</html>

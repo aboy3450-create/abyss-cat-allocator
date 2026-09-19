@@ -1,0 +1,7 @@
+{
+  "name": "abyss-cat-allocator",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test tests/*.test.mjs", "start": "node server.mjs", "build": "node build.mjs" },
+  "devDependencies": { "fake-indexeddb": "6.2.5" }
+}
