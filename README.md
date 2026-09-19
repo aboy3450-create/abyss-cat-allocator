@@ -41,11 +41,19 @@ npm start
 
 本機網址為 `http://127.0.0.1:4178`。請使用本機伺服器，勿直接雙擊 HTML。
 
+測試涵蓋獨立輪替、0 掉落、長期公平性、輸入驗證、交易失敗回復、多分頁競爭、日期分頁、撤回、備份及註解還原。
+
+## 發布
+
+推送到 `main` 後由 GitHub Actions 自動部署，流程是安裝相依套件 → `npm test` → `npm run build` → 部署。測試沒過就不會發布。也可以在 Actions 分頁手動執行「部署到 Firebase Hosting」。
+
+需要在 repo 的 Settings → Secrets and variables → Actions 設定一個 secret `FIREBASE_SERVICE_ACCOUNT`，內容是 Firebase 服務帳戶金鑰的完整 JSON。金鑰只存在 GitHub secret，不進版本庫。
+
+要在本機手動發布時：
+
 ```sh
 npm run build
 firebase deploy --only hosting --project g27-bead-allocator
 ```
 
 發布設定只指向獨立 Hosting site `abyss-cat-allocator`，不修改 G27 原網站。`public/` 只含六個網頁檔案，不包含測試、備份或私人資料。
-
-測試涵蓋獨立輪替、0 掉落、長期公平性、輸入驗證、交易失敗回復、多分頁競爭、日期分頁、撤回、備份及註解還原。
