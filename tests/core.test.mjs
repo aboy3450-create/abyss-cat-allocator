@@ -48,10 +48,10 @@ test('sequence includes full cycles without expanding a million individual entri
 test('game copy is one compact line with daily numbering and no zero items or notes', () => {
   const save = fresh();
   const result = allocate(save,[1,1,0,0]);
-  assert.equal(compactRoundText(save.members,{date:'2026-09-19',dayRound:1,qty:[1,1,0,0],note:'very long note',...result}), '0919(1) 證明:寶寶,(100):寶寶');
+  assert.equal(compactRoundText(save.members,{date:'2026-09-19',dayRound:1,qty:[1,1,0,0],note:'very long note',...result}), '0919(1) 證明：寶寶。 (100)：寶寶。');
   assert.equal(compactRoundText(save.members,{date:'2026-09-20',dayRound:2,qty:[0,0,0,0],...allocate(save,[0,0,0,0])}), '0920(2)');
   save.next=[3,0,0,0];
-  assert.equal(compactRoundText(save.members,{date:'2026-09-20',dayRound:3,qty:[5,0,0,0],...allocate(save,[5,0,0,0])}), '0920(3) 證明:月×2、寶寶、咩咩、爆肝');
+  assert.equal(compactRoundText(save.members,{date:'2026-09-20',dayRound:3,qty:[5,0,0,0],...allocate(save,[5,0,0,0])}), '0920(3) 證明：月×2、寶寶、咩咩、爆肝。');
 });
 test('automatic date follows midnight while explicit historical date stays selected', () => {
   assert.equal(selectedRoundDate('2026-09-19',true,'2026-09-20'),'2026-09-20');

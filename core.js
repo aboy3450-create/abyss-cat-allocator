@@ -60,9 +60,9 @@ export function compactRoundText(members, round) {
     const recipients = Array.from({ length: 4 }, (_, offset) => (round.before[item] + offset) % 4)
       .filter(person => round.allocations[item][person] > 0)
       .map(person => `${members[person]}${round.allocations[item][person] > 1 ? `×${round.allocations[item][person]}` : ''}`);
-    return [`${labels[item]}:${recipients.join('、')}`];
+    return [`${labels[item]}：${recipients.join('、')}`];
   });
-  return `${roundLabel(round)}${parts.length ? ` ${parts.join(',')}` : ''}`;
+  return `${roundLabel(round)}${parts.length ? ` ${parts.join('。 ')}。` : ''}`;
 }
 export function selectedRoundDate(value, automatic, today = localDate()) {
   return automatic ? today : value;
