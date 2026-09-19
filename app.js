@@ -1,4 +1,4 @@
-import { allocate, sequenceText, localDate, MAX_QUANTITY } from './core.js';
+import { allocate, sequenceText, localDate, MAX_QUANTITY, roundLabel, compactRoundText, selectedRoundDate } from './core.js';
 import * as db from './db.js';
 
 const $ = id => document.getElementById(id);
@@ -7,6 +7,12 @@ const num = value => value.toLocaleString('zh-TW');
 const colors = ['#1d6f6a', '#b46c30', '#7770a2', '#b75848'];
 let current = null, latest = null, saves = [], busy = false, navigation = 0;
 let history = { query: null, pages: [null], page: 0, result: null };
+let automaticDate = true;
+function syncDate() {
+  $('round-date').value = selectedRoundDate($('round-date').value, automaticDate);
+  $('date-mode').textContent = automaticDate ? '自動使用今天' : '手動指定日期';
+  $('use-today').hidden = automaticDate;
+}
 const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('abyss-cat-updates') : null;
 
 function notify(message, error = false) {
@@ -71,7 +77,7 @@ async function loadSave(id, clearDraft = true) {
   current = save; latest = round; remember(id);
   $('workspace').hidden = false; $('empty-state').hidden = true;
   if (clearDraft || previous !== id) {
-    renderInputs(); $('round-date').value = localDate(); $('round-note').value = '';
+    renderInputs(); automaticDate = true; syncDate(); $('round-note').value = '';
   }
   renderSave(); resetHistory();
   if (clearDraft) switchTab('allocate');
@@ -104,15 +110,15 @@ function renderSave() {
   $('totals-table').innerHTML = `<table><thead><tr><th scope="col">隊員</th>${current.items.map(item => `<th scope="col">${esc(item)}</th>`).join('')}</tr></thead><tbody>${current.members.map((member,p) => `<tr><th scope="row">${esc(member)}</th>${current.items.map((_,i) => `<td>${num(current.totals[i][p])}</td>`).join('')}</tr>`).join('')}</tbody><tfoot><tr><td>總計</td>${current.totals.map(row => `<td>${num(row.reduce((a,b) => a+b,0))}</td>`).join('')}</tr></tfoot></table>`;
   $('last-round').hidden = !latest;
   if (latest) {
-    $('last-round').innerHTML = `<div class="section-heading"><div><h2>最近一輪 <span class="muted small">#${num(latest.seq)} · ${esc(latest.date)}</span></h2></div><div class="latest-actions"><button class="quiet" id="copy-round">複製分配</button><button class="quiet" id="undo-round">撤回這輪</button></div></div>${roundDetails(latest)}`;
+    $('last-round').innerHTML = `<div class="section-heading"><div><h2>最近一輪 <span class="muted small">${esc(latest.date)} · 第 ${num(latest.dayRound)} 輪</span></h2></div><div class="latest-actions"><button class="quiet" id="copy-round">複製分配</button><button class="quiet" id="undo-round">撤回這輪</button></div></div><p class="compact-preview">${esc(compactRoundText(current.members, latest))}</p>${roundDetails(latest)}`;
     $('undo-round').onclick = async () => {
       const version = current.version, id = current.id;
-      if (busy || !await confirmAction(`撤回第 ${latest.seq} 輪（${latest.date}）？此輪的數量與註解將移除，分配順序會回復到上一輪。`)) return;
+      if (busy || !await confirmAction(`撤回 ${roundLabel(latest)}（${latest.date}）？此輪的數量與註解將移除，分配順序會回復到上一輪。`)) return;
       action(async () => { await db.undoRound(id, version); await loadSave(id, false); changed(); notify('已撤回最近一輪，累計與下一位已回復。'); });
     };
     $('copy-round').onclick = () => action(async () => {
-      await navigator.clipboard.writeText([`${current.name}｜${latest.date} 第 ${latest.seq} 輪`, ...current.items.map((item,i) => `${item} ${latest.qty[i]} 個：${sequenceText(current.members, latest.before[i], latest.qty[i])}`), latest.note ? `寶物註解：${latest.note}` : ''].filter(Boolean).join('\n'));
-      notify('已複製本輪分配與註解。');
+      await navigator.clipboard.writeText(compactRoundText(current.members, latest));
+      notify('已複製簡短分配，省略 0 個道具；寶物註解保留在紀錄內。');
     });
   }
   renderPreview();
@@ -137,7 +143,7 @@ async function fetchHistory() {
       $('history-from').value = $('history-to').value = button.dataset.day; $('history-mode').value = 'rounds';
       await startHistory();
     });
-  } else $('history-results').innerHTML = result.rows.map(round => `<article class="history-round"><h3>${esc(round.date)} · 第 ${num(round.seq)} 輪</h3>${roundDetails(round)}</article>`).join('');
+  } else $('history-results').innerHTML = result.rows.map(round => `<article class="history-round"><h3>${esc(round.date)} · 第 ${num(round.dayRound)} 輪</h3>${roundDetails(round)}</article>`).join('');
   updatePagination();
 }
 async function startHistory() {
@@ -160,19 +166,20 @@ $('create-form').onsubmit = async event => {
   if (hasDraft() && !await confirmAction('建立新存檔會清空目前尚未存檔的輸入，要繼續嗎？')) return;
   action(async () => {
     try {
-      const save = await db.createSave({ name: $('new-name').value, members: [...document.querySelectorAll('[name=member]')].map(el => el.value), items: [...document.querySelectorAll('[name=item]')].map(el => el.value) });
+      const save = await db.createSave({ name: $('new-name').value, members: [...document.querySelectorAll('[name=member]')].map(el => el.value) });
       $('create-dialog').close(); await loadSave(save.id); changed(); notify(`已建立「${save.name}」，四人順序已固定。`);
     } catch (error) { $('create-error').textContent = error.message; $('create-error').hidden = false; }
   });
 };
 $('round-form').onsubmit = event => {
   event.preventDefault();
+  syncDate();
   action(async () => {
     const result = await db.addRound(current.id, current.version, $('round-date').value, readQuantities(), $('round-note').value);
     current = result.save; latest = result.round;
     for (const input of document.querySelectorAll('.quantity')) input.value = '0';
     $('round-note').value = ''; renderSave(); resetHistory(); await refreshSaves(); changed();
-    notify(`第 ${latest.seq} 輪已存檔${latest.qty.every(n => n === 0) ? '（四種道具皆為 0，順序維持不變）' : ''}。`);
+    notify(`${roundLabel(latest)} 已存檔${latest.qty.every(n => n === 0) ? '（四種道具皆為 0，順序維持不變）' : ''}。`);
   });
 };
 $('tab-allocate').onclick = () => switchTab('allocate');
@@ -203,7 +210,11 @@ async function checkExternalUpdate() {
   else await refreshSaves();
 }
 if (channel) channel.onmessage = () => checkExternalUpdate().catch(error => notify(error.message, true));
-document.addEventListener('visibilitychange', () => { if (!document.hidden) checkExternalUpdate().catch(error => notify(error.message, true)); });
+$('round-date').addEventListener('change', () => { automaticDate = $('round-date').value === localDate(); syncDate(); });
+$('use-today').onclick = () => { automaticDate = true; syncDate(); };
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncDate(); checkExternalUpdate().catch(error => notify(error.message, true)); } });
+window.addEventListener('focus', syncDate);
+setInterval(() => { if (!document.hidden && !busy) syncDate(); }, 30000);
 window.addEventListener('beforeunload', event => { if (hasDraft()) { event.preventDefault(); event.returnValue = ''; } });
 async function start() {
   $('round-date').value = $('history-from').value = $('history-to').value = localDate();

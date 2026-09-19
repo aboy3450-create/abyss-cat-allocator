@@ -47,13 +47,25 @@ export async function addRound(id, version, date, qty, note = '') {
     const round = { saveId: id, seq: save.lastSeq + 1, date, at, qty: [...qty], note, before: result.before, allocations: result.allocations };
     const day = await req(days.get([id, date])) || { saveId: id, date, count: 0, qty: [0, 0, 0, 0] };
     day.count++; day.qty = day.qty.map((n, i) => n + qty[i]);
+    round.dayRound = day.count;
     Object.assign(save, { totals: result.totals, next: result.next, lastSeq: round.seq, count: save.count + 1, version: save.version + 1, updatedAt: at });
     rounds.add(round); days.put(day); saves.put(save);
     return { save, round };
   });
 }
 const saveRange = id => IDBKeyRange.bound([id, 0], [id, Number.MAX_SAFE_INTEGER]);
-export const latestRound = id => transaction(['rounds'], 'readonly', async tx => (await req(tx.objectStore('rounds').openCursor(saveRange(id), 'prev')))?.value || null);
+// Older records have no dayRound. Count index keys up to this entry; never load old history in full.
+async function withDayRound(store, round) {
+  if (!round) return null;
+  if (Number.isSafeInteger(round.dayRound) && round.dayRound > 0) return round;
+  const dayRound = await req(store.index('byDate').count(IDBKeyRange.bound([round.saveId, round.date, 0], [round.saveId, round.date, round.seq])));
+  return { ...round, dayRound };
+}
+export const latestRound = id => transaction(['rounds'], 'readonly', async tx => {
+  const store = tx.objectStore('rounds');
+  const round = (await req(store.openCursor(saveRange(id), 'prev')))?.value || null;
+  return withDayRound(store, round);
+});
 export async function undoRound(id, version) {
   return transaction(['saves', 'rounds', 'days'], 'readwrite', async tx => {
     const saves = tx.objectStore('saves'), rounds = tx.objectStore('rounds'), days = tx.objectStore('days');
@@ -85,7 +97,12 @@ function page(source, range, limit = 30) {
 export async function queryHistory(id, from, to, before = null) {
   validDate(from); validDate(to);
   if (from > to) throw new Error('起始日期不能晚於結束日期。');
-  return transaction(['rounds'], 'readonly', tx => page(tx.objectStore('rounds').index('byDate'), IDBKeyRange.bound([id, from, 0], before ? [id, before.date, before.seq] : [id, to, Number.MAX_SAFE_INTEGER], false, !!before)));
+  return transaction(['rounds'], 'readonly', async tx => {
+    const store = tx.objectStore('rounds');
+    const result = await page(store.index('byDate'), IDBKeyRange.bound([id, from, 0], before ? [id, before.date, before.seq] : [id, to, Number.MAX_SAFE_INTEGER], false, !!before));
+    result.rows = await Promise.all(result.rows.map(round => withDayRound(store, round)));
+    return result;
+  });
 }
 export async function queryDays(id, from, to, before = null) {
   validDate(from); validDate(to);

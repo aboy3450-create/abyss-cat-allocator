@@ -19,10 +19,10 @@ export function validNote(note = '') {
   if (typeof note !== 'string' || note.length > 2000) throw new Error('註解最多 2,000 字。');
   return note.trim();
 }
-export function newSave({ id, name, members, items, now = new Date().toISOString() }) {
+export function newSave({ id, name, members, now = new Date().toISOString() }) {
   const people = names(members, '隊員');
   if (typeof name !== 'string' || name.trim().length > 60) throw new Error('存檔名稱最多 60 字。');
-  return { id, name: name.trim() || people.join('・'), members: people, items: names(items, '道具'), totals: emptyTotals(), next: [0, 0, 0, 0], count: 0, lastSeq: 0, version: 0, createdAt: now, updatedAt: now };
+  return { id, name: name.trim() || people.join('・'), members: people, items: [...DEFAULT_ITEMS], totals: emptyTotals(), next: [0, 0, 0, 0], count: 0, lastSeq: 0, version: 0, createdAt: now, updatedAt: now };
 }
 // Each item has its own rotating queue. O(4 × 4), independent of quantity.
 export function allocate(save, input) {
@@ -50,6 +50,23 @@ export function localDate() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
+export function roundLabel(round) {
+  return `${round.date.slice(5).replace('-', '')}(${round.dayRound})`;
+}
+export function compactRoundText(members, round) {
+  const labels = ['證明', '(100)', '(300)', '(500)'];
+  const parts = round.qty.flatMap((quantity, item) => {
+    if (!quantity) return [];
+    const recipients = Array.from({ length: 4 }, (_, offset) => (round.before[item] + offset) % 4)
+      .filter(person => round.allocations[item][person] > 0)
+      .map(person => `${members[person]}${round.allocations[item][person] > 1 ? `×${round.allocations[item][person]}` : ''}`);
+    return [`${labels[item]}:${recipients.join('、')}`];
+  });
+  return `${roundLabel(round)}${parts.length ? ` ${parts.join(',')}` : ''}`;
+}
+export function selectedRoundDate(value, automatic, today = localDate()) {
+  return automatic ? today : value;
+}
 // Backups are untrusted: rebuild all derived values instead of trusting totals/pointers.
 export function validateBackup(data, id) {
   if (!data || data.format !== 'abyss-cat-backup' || data.schema !== 1 || !data.save || !Array.isArray(data.rounds)) throw new Error('不是支援的 深淵貓本備份檔。');
@@ -66,6 +83,7 @@ export function validateBackup(data, id) {
     Object.assign(save, { totals: result.totals, next: result.next, count: save.count + 1, lastSeq: raw.seq });
     const day = days.get(raw.date) || { saveId: id, date: raw.date, count: 0, qty: [0, 0, 0, 0] };
     day.count++;
+    round.dayRound = day.count;
     day.qty = day.qty.map((n, i) => n + raw.qty[i]);
     days.set(raw.date, day);
     previousSeq = raw.seq;

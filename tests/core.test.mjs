@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { allocate, newSave, DEFAULT_ITEMS, validateBackup, sequenceText, validDate, validNote } from '../core.js';
+import { allocate, newSave, DEFAULT_ITEMS, validateBackup, sequenceText, validDate, validNote, compactRoundText, selectedRoundDate } from '../core.js';
 const fresh = () => newSave({ id: 'test', name: '0919', members: ['寶寶', '咩咩', '爆肝', '月'], items: DEFAULT_ITEMS });
 test('each item continues independently; zero does not move its pointer', () => {
   const save = fresh();
@@ -44,4 +44,17 @@ test('sequence includes full cycles without expanding a million individual entri
   assert.equal(sequenceText(fresh().members,3,2),'月 → 寶寶');
   assert.equal(sequenceText(fresh().members,0,0),'本輪 0 個，順序不變');
   assert.ok(sequenceText(fresh().members,0,1000000).length < 100);
+});
+test('game copy is one compact line with daily numbering and no zero items or notes', () => {
+  const save = fresh();
+  const result = allocate(save,[1,1,0,0]);
+  assert.equal(compactRoundText(save.members,{date:'2026-09-19',dayRound:1,qty:[1,1,0,0],note:'very long note',...result}), '0919(1) 證明:寶寶,(100):寶寶');
+  assert.equal(compactRoundText(save.members,{date:'2026-09-20',dayRound:2,qty:[0,0,0,0],...allocate(save,[0,0,0,0])}), '0920(2)');
+  save.next=[3,0,0,0];
+  assert.equal(compactRoundText(save.members,{date:'2026-09-20',dayRound:3,qty:[5,0,0,0],...allocate(save,[5,0,0,0])}), '0920(3) 證明:月×2、寶寶、咩咩、爆肝');
+});
+test('automatic date follows midnight while explicit historical date stays selected', () => {
+  assert.equal(selectedRoundDate('2026-09-19',true,'2026-09-20'),'2026-09-20');
+  assert.equal(selectedRoundDate('2026-09-19',false,'2026-09-20'),'2026-09-19');
+  assert.deepEqual(newSave({...fresh(),items:['a','b','c','d']}).items,DEFAULT_ITEMS);
 });

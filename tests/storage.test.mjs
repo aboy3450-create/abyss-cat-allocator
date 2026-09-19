@@ -79,3 +79,32 @@ test('write failure rolls back the round, totals, and daily summary together', a
   assert.equal(await db.latestRound(save.id),null);
   assert.equal((await db.queryDays(save.id,'2026-09-19','2026-09-19')).rows.length,0);
 });
+test('daily round numbering resets by date, survives reload and undo, and preserves allocation progress', async () => {
+  let save = await create('daily-number');
+  let result = await db.addRound(save.id,save.version,'2026-09-19',[3,0,0,0]); save=result.save;
+  assert.equal(result.round.dayRound,1);
+  result=await db.addRound(save.id,save.version,'2026-09-20',[1,0,0,0]); save=result.save;
+  assert.equal(result.round.dayRound,1); assert.equal(result.round.before[0],3);
+  save=await db.getSave(save.id);
+  result=await db.addRound(save.id,save.version,'2026-09-20',[0,0,0,0]); save=result.save;
+  assert.equal(result.round.dayRound,2);
+  save=await db.undoRound(save.id,save.version);
+  result=await db.addRound(save.id,save.version,'2026-09-20',[1,0,0,0]); save=result.save;
+  assert.equal(result.round.dayRound,2);
+  // A backdated entry continues that date's count, without resetting the item queues.
+  result=await db.addRound(save.id,save.version,'2026-09-19',[1,0,0,0]); save=result.save;
+  assert.equal(result.round.dayRound,2);
+  const backup=await db.exportSave(save.id);
+  for (const round of backup.rounds) delete round.dayRound;
+  const imported=await db.importSave(backup);
+  assert.equal((await db.latestRound(imported.id)).dayRound,2);
+  const connection=await db.openDB();
+  await new Promise((resolve,reject) => {
+    const tx=connection.transaction('rounds','readwrite');
+    for (const round of backup.rounds) tx.objectStore('rounds').put(round);
+    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
+  });
+  assert.equal((await db.latestRound(save.id)).dayRound,2);
+  const rows=(await db.queryHistory(save.id,'2026-09-19','2026-09-20')).rows;
+  assert.deepEqual(rows.map(row=>[row.date,row.dayRound]),[['2026-09-20',2],['2026-09-20',1],['2026-09-19',2],['2026-09-19',1]]);
+});
